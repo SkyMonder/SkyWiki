@@ -11,14 +11,19 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-skywiki')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///skywiki.db')
+
+# База данных SQLite (файл создастся автоматически)
+db_path = os.environ.get('DB_PATH', 'skywiki.db')
+if not db_path.startswith('/'):
+    db_path = os.path.join(os.path.dirname(__file__), db_path)
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# OpenRouter
+# OpenRouter (AI)
 OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY', '')
 OPENROUTER_MODEL = os.environ.get('OPENROUTER_MODEL', 'nvidia/llama-nemotron-embed-vl-1b-v2:free')
 MODERATION_MODEL = os.environ.get('MODERATION_MODEL', OPENROUTER_MODEL)
@@ -59,14 +64,14 @@ class ModerationLog(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# Создание таблиц
+# Создаём таблицы при первом запуске
 with app.app_context():
     db.create_all()
     if User.query.count() == 0:
         admin = User(
-            username='SkyMonder',
-            email='rilloperdagelo@gmail.com',
-            password_hash=generate_password_hash('01206090'),
+            username='admin',
+            email='admin@skywiki.com',
+            password_hash=generate_password_hash('admin123'),
             is_admin=True
         )
         db.session.add(admin)
@@ -110,7 +115,7 @@ def moderate_content(title, content):
         except:
             verdict = 'OK' in answer and 'NOT OK' not in answer
 
-        # Логируем
+        # Логируем результат
         if current_user.is_authenticated:
             log = ModerationLog(
                 title=title[:200],
@@ -138,14 +143,14 @@ def ping():
 # API: Статьи
 @app.route('/api/articles', methods=['GET'])
 def get_articles():
-    articles = Article.query.filter_by(is_hidden=False).order_by(Article.created_at.desc()).all()
+    arts = Article.query.filter_by(is_hidden=False).order_by(Article.created_at.desc()).all()
     return jsonify([{
         'id': a.id,
         'title': a.title,
         'created_at': a.created_at.isoformat(),
         'views': a.views,
         'author': a.author.username
-    } for a in articles])
+    } for a in arts])
 
 @app.route('/api/articles/<int:article_id>', methods=['GET'])
 def get_article(article_id):

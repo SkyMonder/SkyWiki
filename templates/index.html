@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyWiki — народная энциклопедия</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fb;
+            color: #1a2b4c;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 32px;
+            box-shadow: 0 20px 40px -15px rgba(0,30,60,0.2);
+            padding: 30px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #eef2f6;
+        }
+        .logo h1 {
+            font-size: 2.8rem;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+        }
+        .user-panel button {
+            padding: 8px 16px;
+            margin-left: 10px;
+            border: none;
+            border-radius: 40px;
+            background: #eef2f6;
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+        .user-panel button:hover {
+            background: #d9e2ef;
+        }
+        .toolbar {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+        }
+        #searchInput {
+            flex: 1;
+            padding: 12px 20px;
+            border: 2px solid #eef2f6;
+            border-radius: 60px;
+            font-size: 1rem;
+            min-width: 250px;
+        }
+        #searchInput:focus {
+            outline: none;
+            border-color: #2a5298;
+        }
+        .btn {
+            padding: 12px 28px;
+            border: none;
+            border-radius: 60px;
+            font-weight: 600;
+            cursor: pointer;
+            background: #eef2f6;
+            transition: 0.1s;
+            font-size: 0.95rem;
+        }
+        .btn-primary {
+            background: linear-gradient(145deg, #1e3c72, #2a4a7a);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #2a4a7a;
+        }
+        .btn:hover {
+            background: #d9e2ef;
+        }
+        .main-layout {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 25px;
+        }
+        .sidebar {
+            background: #f9fbfe;
+            border-radius: 28px;
+            padding: 20px;
+            height: fit-content;
+        }
+        .sidebar h3 {
+            margin-bottom: 20px;
+            color: #163a5c;
+        }
+        #articleList {
+            list-style: none;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        #articleList li {
+            padding: 12px 16px;
+            margin-bottom: 6px;
+            background: white;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px -3px rgba(0,0,0,0.05);
+            transition: 0.1s;
+            border: 1px solid transparent;
+        }
+        #articleList li:hover {
+            background: #e3f0ff;
+            border-color: #a0c4ff;
+            transform: translateX(5px);
+        }
+        .content {
+            background: white;
+            border-radius: 28px;
+            padding: 30px;
+            min-height: 400px;
+            border: 1px solid #eef2f6;
+        }
+        .article-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        .article-header h2 {
+            font-size: 2.2rem;
+            color: #0a2647;
+        }
+        .article-meta {
+            color: #5f6f8f;
+            font-size: 0.9rem;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eef2f6;
+        }
+        .article-body {
+            line-height: 1.7;
+            font-size: 1.05rem;
+        }
+        .article-body h2 { font-size: 1.8rem; margin: 25px 0 15px; }
+        .article-body h3 { font-size: 1.4rem; margin: 20px 0 10px; }
+        .editor input, .editor textarea {
+            width: 100%;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 2px solid #eef2f6;
+            border-radius: 20px;
+            font-size: 1rem;
+        }
+        .editor textarea {
+            min-height: 350px;
+            resize: vertical;
+        }
+        .ai-panel {
+            margin-top: 30px;
+            background: #ebf3ff;
+            border-radius: 60px;
+            padding: 15px 25px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            border: 1px dashed #2a5298;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">
+                <h1>SkyWiki</h1>
+            </div>
+            <div class="user-panel" id="userPanel">
+                <button onclick="showLogin()">Войти</button>
+                <button onclick="showRegister()">Регистрация</button>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <input type="text" id="searchInput" placeholder="🔍 Найти статью...">
+            <button class="btn" id="newArticleBtn" onclick="newArticle()">➕ Новая статья</button>
+            <button class="btn btn-primary" id="aiBtn" onclick="askAI()">✨ Спросить AI</button>
+        </div>
+
+        <div class="main-layout">
+            <div class="sidebar">
+                <h3>📚 Все статьи</h3>
+                <ul id="articleList"></ul>
+            </div>
+            <div class="content" id="content">
+                <p style="text-align: center; color: #6f7f9f;">Выберите статью из списка или создайте новую</p>
+            </div>
+        </div>
+
+        <div class="ai-panel">
+            <span>🤖 SkyAI — бесплатный ИИ-помощник (модерация + генерация)</span>
+            <span style="color:#2a5298;">⚡ работает на NVIDIA / OpenRouter</span>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let articles = [];
+        let currentArticleId = null;
+        let isEditing = false;
+
+        const articleList = document.getElementById('articleList');
+        const content = document.getElementById('content');
+        const searchInput = document.getElementById('searchInput');
+        const userPanel = document.getElementById('userPanel');
+
+        // Загрузка статей
+        async function loadArticles() {
+            const res = await fetch('/api/articles');
+            articles = await res.json();
+            renderSidebar();
+        }
+
+        function renderSidebar(filter = '') {
+            const filtered = articles.filter(a => 
+                a.title.toLowerCase().includes(filter.toLowerCase())
+            );
+            articleList.innerHTML = filtered.map(a => 
+                `<li onclick="loadArticle(${a.id})">${a.title} (👁️ ${a.views})</li>`
+            ).join('');
+        }
+
+        async function loadArticle(id) {
+            const res = await fetch(`/api/articles/${id}`);
+            const article = await res.json();
+            currentArticleId = article.id;
+            isEditing = false;
+            renderArticle(article);
+        }
+
+        function renderArticle(article) {
+            let buttons = '';
+            if (currentUser && (article.can_edit || currentUser.is_admin)) {
+                buttons = `
+                    <button onclick="editArticle()">✏️ Редактировать</button>
+                    <button onclick="deleteArticle()">🗑️ Удалить</button>
+                `;
+            }
+            content.innerHTML = `
+                <div class="article-header">
+                    <h2>${escapeHtml(article.title)}</h2>
+                    <div>${buttons}</div>
+                </div>
+                <div class="article-meta">
+                    Автор: ${article.author} | 👁️ ${article.views} | ${new Date(article.created_at).toLocaleDateString()}
+                </div>
+                <div class="article-body">${renderWikitext(article.content)}</div>
+            `;
+        }
+
+        function renderWikitext(text) {
+            return text
+                .replace(/===(.+?)===/g, '<h3>$1</h3>')
+                .replace(/==(.+?)==/g, '<h2>$1</h2>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\/(.+?)\//g, '<em>$1</em>')
+                .replace(/^\* (.+)$/gm, '<li>$1</li>')
+                .replace(/(<li>.+<\/li>\n?)+/g, '<ul>$&</ul>')
+                .replace(/\n/g, '<br>');
+        }
+
+        function escapeHtml(unsafe) {
+            return unsafe.replace(/[&<>"]/g, function(m) {
+                if(m === '&') return '&amp;';
+                if(m === '<') return '&lt;';
+                if(m === '>') return '&gt;';
+                if(m === '"') return '&quot;';
+                return m;
+            });
+        }
+
+        function newArticle() {
+            if (!currentUser) { alert('Войдите, чтобы создавать статьи'); return; }
+            currentArticleId = null;
+            isEditing = true;
+            content.innerHTML = `
+                <div class="editor">
+                    <input type="text" id="editTitle" placeholder="Заголовок статьи">
+                    <textarea id="editContent" placeholder="Содержимое... можно использовать ==заголовки==, **жирный**, //курсив//, * списки"></textarea>
+                    <div>
+                        <button class="btn btn-primary" onclick="saveArticle()">💾 Сохранить</button>
+                        <button class="btn" onclick="cancelEdit()">Отмена</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function editArticle() {
+            if (!currentArticleId) return;
+            fetch(`/api/articles/${currentArticleId}`)
+                .then(res => res.json())
+                .then(article => {
+                    content.innerHTML = `
+                        <div class="editor">
+                            <input type="text" id="editTitle" value="${escapeHtml(article.title)}">
+                            <textarea id="editContent">${escapeHtml(article.content)}</textarea>
+                            <div>
+                                <button class="btn btn-primary" onclick="saveArticle()">💾 Сохранить</button>
+                                <button class="btn" onclick="cancelEdit()">Отмена</button>
+                            </div>
+                        </div>
+                    `;
+                    isEditing = true;
+                });
+        }
+
+        async function saveArticle() {
+            const title = document.getElementById('editTitle').value.trim();
+            const contentText = document.getElementById('editContent').value;
+            if (!title) return alert('Заголовок обязателен');
+
+            const method = currentArticleId ? 'PUT' : 'POST';
+            const url = currentArticleId ? `/api/articles/${currentArticleId}` : '/api/articles';
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, content: contentText })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                await loadArticles();
+                if (!currentArticleId) {
+                    // новая статья — перезагружаем список и показываем первую страницу
+                    window.location.reload();
+                } else {
+                    loadArticle(currentArticleId);
+                }
+            } else {
+                alert('Ошибка: ' + (data.error || 'неизвестная'));
+            }
+            isEditing = false;
+        }
+
+        function cancelEdit() {
+            if (currentArticleId) {
+                loadArticle(currentArticleId);
+            } else {
+                content.innerHTML = '<p style="text-align: center;">Выберите статью из списка</p>';
+            }
+            isEditing = false;
+        }
+
+        async function deleteArticle() {
+            if (!currentArticleId || !confirm('Удалить статью?')) return;
+            const res = await fetch(`/api/articles/${currentArticleId}`, { method: 'DELETE' });
+            if (res.ok) {
+                await loadArticles();
+                content.innerHTML = '<p style="text-align: center;">Статья удалена</p>';
+                currentArticleId = null;
+            }
+        }
+
+        async function askAI() {
+            if (!currentUser) { alert('Войдите, чтобы использовать AI'); return; }
+            const prompt = prompt('О чём написать статью? (например: "История Шадринска", "Кто такой Луи де Судак?")');
+            if (!prompt) return;
+            const res = await fetch('/api/ai/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt })
+            });
+            const data = await res.json();
+            if (data.response) {
+                if (confirm('Текст готов. Создать статью с этим содержанием?')) {
+                    const title = prompt('Название статьи:', prompt.slice(0, 50));
+                    if (title) {
+                        const saveRes = await fetch('/api/articles', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ title, content: data.response })
+                        });
+                        if (saveRes.ok) {
+                            await loadArticles();
+                            window.location.reload();
+                        }
+                    }
+                }
+            } else {
+                alert('Ошибка генерации: ' + (data.error || 'неизвестная'));
+            }
+        }
+
+        // Авторизация
+        async function checkAuth() {
+            const res = await fetch('/api/me');
+            if (res.ok) {
+                currentUser = await res.json();
+                userPanel.innerHTML = `${currentUser.username} <button onclick="logout()">Выйти</button>`;
+            } else {
+                currentUser = null;
+                userPanel.innerHTML = '<button onclick="showLogin()">Войти</button> <button onclick="showRegister()">Регистрация</button>';
+            }
+        }
+
+        function showLogin() {
+            const username = prompt('Имя пользователя:');
+            if (!username) return;
+            const password = prompt('Пароль:');
+            if (!password) return;
+            fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.message === 'Logged in') {
+                    checkAuth();
+                } else {
+                    alert('Ошибка входа: ' + (data.error || 'неверные данные'));
+                }
+            });
+        }
+
+        function showRegister() {
+            const username = prompt('Имя пользователя:');
+            if (!username) return;
+            const email = prompt('Email:');
+            if (!email) return;
+            const password = prompt('Пароль:');
+            if (!password) return;
+            fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, email, password })
+            })
+            .then(res => {
+                if (res.ok) {
+                    alert('Регистрация успешна, теперь войдите');
+                } else {
+                    res.json().then(d => alert('Ошибка: ' + (d.error || 'неизвестная')));
+                }
+            });
+        }
+
+        function logout() {
+            fetch('/api/logout', { method: 'POST' })
+                .then(() => {
+                    currentUser = null;
+                    checkAuth();
+                });
+        }
+
+        // Поиск
+        searchInput.addEventListener('input', e => renderSidebar(e.target.value));
+
+        // Инициализация
+        (async function init() {
+            await checkAuth();
+            await loadArticles();
+        })();
+    </script>
+</body>
+</html>

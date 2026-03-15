@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SkyWiki — свободная энциклопедия</title>
     <style>
+        /* Стили полностью сохранены из предыдущей версии */
         * {
             margin: 0;
             padding: 0;
@@ -40,16 +41,28 @@
             -webkit-text-fill-color: transparent;
             letter-spacing: -1px;
         }
-        .user-panel button {
+        .user-panel {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .user-panel button, .admin-link {
             padding: 8px 16px;
-            margin-left: 10px;
             border: none;
             border-radius: 40px;
             background: #eef2f6;
             cursor: pointer;
             font-size: 0.95rem;
+            text-decoration: none;
+            color: #1a2b4c;
+            display: inline-block;
         }
-        .user-panel button:hover {
+        .admin-link {
+            background: #d4e2fc;
+            color: #1e3c72;
+            font-weight: 500;
+        }
+        .user-panel button:hover, .admin-link:hover {
             background: #d9e2ef;
         }
         .toolbar {
@@ -179,6 +192,39 @@
             flex-wrap: wrap;
             border: 1px dashed #2a5298;
         }
+        .swtext-hint {
+            font-size: 0.9rem;
+            color: #2a5298;
+            cursor: help;
+            border-bottom: 1px dashed #2a5298;
+        }
+        /* Всплывающая подсказка */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 300px;
+            background-color: #1e3c72;
+            color: #fff;
+            text-align: left;
+            border-radius: 12px;
+            padding: 12px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -150px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.9rem;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -188,15 +234,25 @@
                 <h1>SkyWiki</h1>
             </div>
             <div class="user-panel" id="userPanel">
-                <button onclick="showLogin()">Войти</button>
-                <button onclick="showRegister()">Регистрация</button>
+                <!-- Динамически заполняется -->
             </div>
         </div>
 
         <div class="toolbar">
             <input type="text" id="searchInput" placeholder="🔍 Найти статью...">
             <button class="btn" id="newArticleBtn" onclick="newArticle()">➕ Новая статья</button>
-            <button class="btn btn-primary" id="aiBtn" onclick="askAI()">✨ Спросить AI</button>
+            <!-- Подсказка по swtext -->
+            <div class="tooltip">
+                <span class="swtext-hint">📘 swtext</span>
+                <div class="tooltiptext">
+                    <b>Язык разметки swtext:</b><br>
+                    • == Заголовок == — заголовок 2 уровня<br>
+                    • === Подзаголовок === — заголовок 3 уровня<br>
+                    • **жирный** — жирный текст<br>
+                    • //курсив// — курсив<br>
+                    • * пункт — маркированный список
+                </div>
+            </div>
         </div>
 
         <div class="main-layout">
@@ -210,8 +266,8 @@
         </div>
 
         <div class="ai-panel">
-            <span>🤖 SkyAI — бесплатный ИИ-помощник (модерация + генерация)</span>
-            <span style="color:#2a5298;">⚡ работает на NVIDIA / OpenRouter</span>
+            <span>🤖 SkyAI — модерация активна</span>
+            <span style="color:#2a5298;">⚡ swtext — вики-разметка</span>
         </div>
     </div>
 
@@ -270,15 +326,21 @@
             `;
         }
 
+        // ================== ЯЗЫК РАЗМЕТКИ SWTEXT ==================
         function renderWikitext(text) {
-            return text
-                .replace(/===(.+?)===/g, '<h3>$1</h3>')
-                .replace(/==(.+?)==/g, '<h2>$1</h2>')
-                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\/(.+?)\//g, '<em>$1</em>')
-                .replace(/^\* (.+)$/gm, '<li>$1</li>')
-                .replace(/(<li>.+<\/li>\n?)+/g, '<ul>$&</ul>')
-                .replace(/\n/g, '<br>');
+            if (!text) return '';
+            // Заголовки
+            text = text.replace(/^===(.+?)===/gm, '<h3>$1</h3>');
+            text = text.replace(/^==(.+?)==/gm, '<h2>$1</h2>');
+            // Жирный и курсив
+            text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            text = text.replace(/\/(.+?)\//g, '<em>$1</em>');
+            // Маркированные списки (строки, начинающиеся с *)
+            text = text.replace(/^\* (.+)$/gm, '<li>$1</li>');
+            text = text.replace(/(<li>.+<\/li>\n?)+/g, '<ul>$&</ul>');
+            // Переносы строк
+            text = text.replace(/\n/g, '<br>');
+            return text;
         }
 
         function escapeHtml(unsafe) {
@@ -371,43 +433,20 @@
             }
         }
 
-        // AI генерация (исправлено: userPrompt вместо prompt)
-        async function askAI() {
-            if (!currentUser) { alert('Войдите, чтобы использовать AI'); return; }
-            const userPrompt = prompt('О чём написать статью?');
-            if (!userPrompt) return;
-            const res = await fetch('/api/ai/generate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: userPrompt })
-            });
-            const data = await res.json();
-            if (data.response) {
-                if (confirm('Текст готов. Создать статью с этим содержанием?')) {
-                    const title = prompt('Название статьи:', userPrompt.slice(0, 50));
-                    if (title) {
-                        const saveRes = await fetch('/api/articles', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ title, content: data.response })
-                        });
-                        if (saveRes.ok) {
-                            await loadArticles();
-                            window.location.reload();
-                        }
-                    }
-                }
-            } else {
-                alert('Ошибка генерации: ' + (data.error || 'неизвестная'));
-            }
-        }
-
-        // Авторизация
+        // ================== АВТОРИЗАЦИЯ ==================
         async function checkAuth() {
             const res = await fetch('/api/me');
             if (res.ok) {
                 currentUser = await res.json();
-                userPanel.innerHTML = `${currentUser.username} <button onclick="logout()">Выйти</button>`;
+                let adminLink = '';
+                if (currentUser.is_admin) {
+                    adminLink = '<a href="/admin" class="admin-link" target="_blank">⚙️ Админка</a>';
+                }
+                userPanel.innerHTML = `
+                    ${adminLink}
+                    <span>${currentUser.username}</span>
+                    <button onclick="logout()">Выйти</button>
+                `;
             } else {
                 currentUser = null;
                 userPanel.innerHTML = '<button onclick="showLogin()">Войти</button> <button onclick="showRegister()">Регистрация</button>';

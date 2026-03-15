@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SkyWiki — народная энциклопедия</title>
+    <title>SkyWiki — свободная энциклопедия</title>
     <style>
         * {
             margin: 0;
@@ -342,7 +342,6 @@
             if (res.ok) {
                 await loadArticles();
                 if (!currentArticleId) {
-                    // новая статья — перезагружаем список и показываем первую страницу
                     window.location.reload();
                 } else {
                     loadArticle(currentArticleId);
@@ -372,19 +371,20 @@
             }
         }
 
+        // AI генерация (исправлено: userPrompt вместо prompt)
         async function askAI() {
             if (!currentUser) { alert('Войдите, чтобы использовать AI'); return; }
-            const prompt = prompt('О чём написать статью? (например: "История Шадринска", "Кто такой Луи де Судак?")');
-            if (!prompt) return;
+            const userPrompt = prompt('О чём написать статью?');
+            if (!userPrompt) return;
             const res = await fetch('/api/ai/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt })
+                body: JSON.stringify({ prompt: userPrompt })
             });
             const data = await res.json();
             if (data.response) {
                 if (confirm('Текст готов. Создать статью с этим содержанием?')) {
-                    const title = prompt('Название статьи:', prompt.slice(0, 50));
+                    const title = prompt('Название статьи:', userPrompt.slice(0, 50));
                     if (title) {
                         const saveRes = await fetch('/api/articles', {
                             method: 'POST',

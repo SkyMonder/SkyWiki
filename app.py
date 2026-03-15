@@ -64,9 +64,9 @@ with app.app_context():
     db.create_all()
     if User.query.count() == 0:
         admin = User(
-            username='admin',
-            email='admin@skywiki.com',
-            password_hash=generate_password_hash('admin123'),
+            username='SkyMonder',
+            email='rilloperdagelo@gmail.com',
+            password_hash=generate_password_hash('01206090'),
             is_admin=True
         )
         db.session.add(admin)

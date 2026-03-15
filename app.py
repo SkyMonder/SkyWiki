@@ -27,14 +27,14 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
-login_manager.login_view = 'login'
+login_manager.login_view = 'login'  # имя функции для входа
 
 # OpenRouter
 OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY', '')
 OPENROUTER_MODEL = os.environ.get('OPENROUTER_MODEL', 'nvidia/llama-nemotron-embed-vl-1b-v2:free')
 MODERATION_MODEL = os.environ.get('MODERATION_MODEL', OPENROUTER_MODEL)
 
-# Модели (без изменений)
+# ================== МОДЕЛИ ==================
 class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
@@ -70,7 +70,7 @@ class ModerationLog(db.Model):
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
-# Создание таблиц и админа при первом запуске
+# Создание таблиц и админа
 with app.app_context():
     db.create_all()
     if User.query.count() == 0:
@@ -84,7 +84,7 @@ with app.app_context():
         db.session.commit()
         logger.info("Admin user created (admin/admin123)")
 
-# Модерация (без изменений)
+# ================== МОДЕРАЦИЯ ==================
 def moderate_content(title, content):
     if not OPENROUTER_API_KEY:
         return True
@@ -143,7 +143,7 @@ def index():
 def ping():
     return 'pong'
 
-# API: Статьи (без изменений, как в предыдущей версии)
+# API: Статьи
 @app.route('/api/articles', methods=['GET'])
 def get_articles():
     arts = Article.query.filter_by(is_hidden=False).order_by(Article.created_at.desc()).all()
@@ -214,7 +214,7 @@ def delete_article(article_id):
     db.session.commit()
     return jsonify({'message': 'Article deleted'})
 
-# API: Пользователи (УЛУЧШЕНО с обработкой ошибок)
+# ================== АВТОРИЗАЦИЯ (исправлено) ==================
 @app.route('/api/register', methods=['POST'])
 def register():
     try:
@@ -241,8 +241,17 @@ def register():
         logger.error(f"Register error: {e}\n{traceback.format_exc()}")
         return jsonify({'error': 'Internal server error'}), 500
 
-@app.route('/api/login', methods=['POST'])
+@app.route('/api/login', methods=['GET', 'POST'])
 def login():
+    # Обработка GET-запроса (например, при редиректе от Flask-Login)
+    if request.method == 'GET':
+        # Можно вернуть подсказку или просто ошибку с пояснением
+        return jsonify({
+            'error': 'Method GET not allowed. Please send POST with username and password.',
+            'hint': 'This endpoint is for API login. Use POST.'
+        }), 405  # 405 Method Not Allowed, но с понятным сообщением
+
+    # POST-обработка
     try:
         data = request.json
         if not data:
@@ -295,7 +304,7 @@ def me():
         'is_admin': current_user.is_admin
     })
 
-# AI генерация
+# ================== AI генерация ==================
 @app.route('/api/ai/generate', methods=['POST'])
 @login_required
 def ai_generate():
@@ -332,7 +341,7 @@ def ai_generate():
         logger.error(f"AI generate error: {e}")
         return jsonify({'error': str(e)}), 500
 
-# Добавим тестовый эндпоинт для проверки БД
+# ================== Health check ==================
 @app.route('/api/health', methods=['GET'])
 def health():
     try:

@@ -27,7 +27,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
-login_manager.login_view = 'login'  # имя функции для входа
+login_manager.login_view = 'login'
 
 # OpenRouter
 OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY', '')
@@ -45,10 +45,9 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     articles = db.relationship('Article', backref='author', lazy=True)
 
-    # Flask-Login требует этот атрибут; можно оставить так или динамически вычислять
     @property
     def is_active(self):
-        return True  # Здесь можно добавить логику, например, поле `active`
+        return True  # здесь можно добавить логику деактивации
 
 class Article(db.Model):
     __tablename__ = 'articles'
@@ -75,7 +74,7 @@ class ModerationLog(db.Model):
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
-# Создание таблиц и админа
+# Создание таблиц и админа при первом запуске
 with app.app_context():
     db.create_all()
     if User.query.count() == 0:
@@ -139,7 +138,6 @@ def moderate_content(title, content):
         return True
 
 # ================== МАРШРУТЫ ==================
-
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -219,7 +217,7 @@ def delete_article(article_id):
     db.session.commit()
     return jsonify({'message': 'Article deleted'})
 
-# ================== АВТОРИЗАЦИЯ (исправлено) ==================
+# ================== АВТОРИЗАЦИЯ ==================
 @app.route('/api/register', methods=['POST'])
 def register():
     try:
@@ -248,14 +246,10 @@ def register():
 
 @app.route('/api/login', methods=['GET', 'POST'])
 def login():
-    # Обработка GET-запроса (например, при редиректе от Flask-Login)
+    # GET-запросы (например, редирект от Flask-Login)
     if request.method == 'GET':
-        return jsonify({
-            'error': 'Method GET not allowed. Please send POST with username and password.',
-            'hint': 'This endpoint is for API login. Use POST.'
-        }), 405
+        return jsonify({'error': 'Method GET not allowed. Please send POST with username and password.'}), 405
 
-    # POST-обработка
     try:
         data = request.json
         if not data:
@@ -308,7 +302,7 @@ def me():
         'is_admin': current_user.is_admin
     })
 
-# ================== AI генерация ==================
+# ================== AI ГЕНЕРАЦИЯ ==================
 @app.route('/api/ai/generate', methods=['POST'])
 @login_required
 def ai_generate():
@@ -345,7 +339,7 @@ def ai_generate():
         logger.error(f"AI generate error: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ================== Health check ==================
+# ================== HEALTH CHECK ==================
 @app.route('/api/health', methods=['GET'])
 def health():
     try:

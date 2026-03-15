@@ -1,5 +1,7 @@
 import os
 import json
+import logging
+import traceback
 import requests
 from flask import Flask, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -8,11 +10,15 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 from flask_cors import CORS
 
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 app = Flask(__name__)
 CORS(app)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-skywiki')
 
-# База данных SQLite (файл создастся автоматически)
+# База данных SQLite
 db_path = os.environ.get('DB_PATH', 'skywiki.db')
 if not db_path.startswith('/'):
     db_path = os.path.join(os.path.dirname(__file__), db_path)
@@ -23,12 +29,12 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# OpenRouter (AI)
+# OpenRouter
 OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY', '')
 OPENROUTER_MODEL = os.environ.get('OPENROUTER_MODEL', 'nvidia/llama-nemotron-embed-vl-1b-v2:free')
 MODERATION_MODEL = os.environ.get('MODERATION_MODEL', OPENROUTER_MODEL)
 
-# ================== МОДЕЛИ ==================
+# Модели (без изменений)
 class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
@@ -62,28 +68,27 @@ class ModerationLog(db.Model):
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
-# Создаём таблицы при первом запуске
+# Создание таблиц и админа при первом запуске
 with app.app_context():
     db.create_all()
     if User.query.count() == 0:
         admin = User(
-            username='SkyMonder',
-            email='rilloperdagelo@gmail.com',
-            password_hash=generate_password_hash('01206090'),
+            username='admin',
+            email='admin@skywiki.com',
+            password_hash=generate_password_hash('admin123'),
             is_admin=True
         )
         db.session.add(admin)
         db.session.commit()
+        logger.info("Admin user created (admin/admin123)")
 
-# ================== МОДЕРАЦИЯ ==================
+# Модерация (без изменений)
 def moderate_content(title, content):
     if not OPENROUTER_API_KEY:
         return True
-
     full_text = f"Заголовок: {title}\n\nТекст статьи:\n{content[:2000]}"
-
     try:
         response = requests.post(
             'https://openrouter.ai/api/v1/chat/completions',
@@ -107,15 +112,12 @@ def moderate_content(title, content):
         data = response.json()
         if 'choices' not in data:
             return True
-
         answer = data['choices'][0]['message']['content']
         try:
             verdict_data = json.loads(answer)
             verdict = verdict_data.get('verdict') == 'OK'
         except:
             verdict = 'OK' in answer and 'NOT OK' not in answer
-
-        # Логируем результат
         if current_user.is_authenticated:
             log = ModerationLog(
                 title=title[:200],
@@ -128,19 +130,20 @@ def moderate_content(title, content):
             db.session.commit()
         return verdict
     except Exception as e:
-        print(f"Moderation error: {e}")
+        logger.error(f"Moderation error: {e}")
         return True
 
 # ================== МАРШРУТЫ ==================
+
 @app.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/ping', methods=['GET'])
+@app.route('/ping')
 def ping():
-    return 'pong', 200
+    return 'pong'
 
-# API: Статьи
+# API: Статьи (без изменений, как в предыдущей версии)
 @app.route('/api/articles', methods=['GET'])
 def get_articles():
     arts = Article.query.filter_by(is_hidden=False).order_by(Article.created_at.desc()).all()
@@ -172,12 +175,10 @@ def get_article(article_id):
 @login_required
 def create_article():
     data = request.json
-    if not data.get('title') or not data.get('content'):
+    if not data or not data.get('title') or not data.get('content'):
         return jsonify({'error': 'Title and content required'}), 400
-
     if not moderate_content(data['title'], data['content']):
         return jsonify({'error': 'Статья не прошла модерацию. Проверьте, нет ли в ней рекламы, оскорблений или бессмыслицы.'}), 400
-
     article = Article(
         title=data['title'],
         content=data['content'],
@@ -193,14 +194,11 @@ def update_article(article_id):
     article = Article.query.get_or_404(article_id)
     if not (current_user.id == article.user_id or current_user.is_admin):
         return jsonify({'error': 'Permission denied'}), 403
-
     data = request.json
     new_title = data.get('title', article.title)
     new_content = data.get('content', article.content)
-
     if not moderate_content(new_title, new_content):
         return jsonify({'error': 'Обновлённая статья не прошла модерацию.'}), 400
-
     article.title = new_title
     article.content = new_content
     db.session.commit()
@@ -216,38 +214,76 @@ def delete_article(article_id):
     db.session.commit()
     return jsonify({'message': 'Article deleted'})
 
-# API: Пользователи
+# API: Пользователи (УЛУЧШЕНО с обработкой ошибок)
 @app.route('/api/register', methods=['POST'])
 def register():
-    data = request.json
-    if User.query.filter_by(username=data['username']).first():
-        return jsonify({'error': 'Username exists'}), 400
-    user = User(
-        username=data['username'],
-        email=data['email'],
-        password_hash=generate_password_hash(data['password'])
-    )
-    db.session.add(user)
-    db.session.commit()
-    return jsonify({'message': 'User created'}), 201
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No JSON data'}), 400
+        username = data.get('username')
+        email = data.get('email')
+        password = data.get('password')
+        if not username or not email or not password:
+            return jsonify({'error': 'Missing fields'}), 400
+        if User.query.filter_by(username=username).first():
+            return jsonify({'error': 'Username exists'}), 400
+        user = User(
+            username=username,
+            email=email,
+            password_hash=generate_password_hash(password)
+        )
+        db.session.add(user)
+        db.session.commit()
+        logger.info(f"New user registered: {username}")
+        return jsonify({'message': 'User created'}), 201
+    except Exception as e:
+        logger.error(f"Register error: {e}\n{traceback.format_exc()}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    data = request.json
-    user = User.query.filter_by(username=data['username']).first()
-    if user and check_password_hash(user.password_hash, data['password']):
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No JSON data'}), 400
+        username = data.get('username')
+        password = data.get('password')
+        if not username or not password:
+            return jsonify({'error': 'Missing credentials'}), 400
+
+        user = User.query.filter_by(username=username).first()
+        if not user:
+            logger.warning(f"Login attempt with unknown user: {username}")
+            return jsonify({'error': 'Invalid credentials'}), 401
+
+        if not check_password_hash(user.password_hash, password):
+            logger.warning(f"Wrong password for user: {username}")
+            return jsonify({'error': 'Invalid credentials'}), 401
+
         login_user(user)
+        logger.info(f"User logged in: {username}")
         return jsonify({
             'message': 'Logged in',
-            'user': {'id': user.id, 'username': user.username, 'is_admin': user.is_admin}
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'is_admin': user.is_admin
+            }
         })
-    return jsonify({'error': 'Invalid credentials'}), 401
+    except Exception as e:
+        logger.error(f"Login error: {e}\n{traceback.format_exc()}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/logout', methods=['POST'])
 @login_required
 def logout():
-    logout_user()
-    return jsonify({'message': 'Logged out'})
+    try:
+        logout_user()
+        return jsonify({'message': 'Logged out'})
+    except Exception as e:
+        logger.error(f"Logout error: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/me', methods=['GET'])
 @login_required
@@ -259,18 +295,16 @@ def me():
         'is_admin': current_user.is_admin
     })
 
-# API: AI генерация
+# AI генерация
 @app.route('/api/ai/generate', methods=['POST'])
 @login_required
 def ai_generate():
-    data = request.json
-    prompt = data.get('prompt')
-    if not prompt:
-        return jsonify({'error': 'Prompt required'}), 400
-    if not OPENROUTER_API_KEY:
-        return jsonify({'error': 'AI service not configured'}), 503
-
     try:
+        data = request.json
+        if not data or not data.get('prompt'):
+            return jsonify({'error': 'Prompt required'}), 400
+        if not OPENROUTER_API_KEY:
+            return jsonify({'error': 'AI service not configured'}), 503
         response = requests.post(
             'https://openrouter.ai/api/v1/chat/completions',
             headers={
@@ -283,7 +317,7 @@ def ai_generate():
                 'model': OPENROUTER_MODEL,
                 'messages': [
                     {'role': 'system', 'content': 'Ты — помощник вики-энциклопедии SkyWiki. Создавай статьи в формате вики-текста (== заголовки ==, * списки, **жирный**).'},
-                    {'role': 'user', 'content': prompt}
+                    {'role': 'user', 'content': data['prompt']}
                 ],
                 'max_tokens': 1500,
                 'temperature': 0.7
@@ -295,7 +329,17 @@ def ai_generate():
             return jsonify({'error': 'AI service error'}), 502
         return jsonify({'response': data['choices'][0]['message']['content']})
     except Exception as e:
+        logger.error(f"AI generate error: {e}")
         return jsonify({'error': str(e)}), 500
+
+# Добавим тестовый эндпоинт для проверки БД
+@app.route('/api/health', methods=['GET'])
+def health():
+    try:
+        users_count = User.query.count()
+        return jsonify({'status': 'ok', 'users': users_count})
+    except Exception as e:
+        return jsonify({'status': 'error', 'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -31,7 +31,7 @@ login_manager.login_view = 'login'
 
 # OpenRouter
 OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY', '')
-OPENROUTER_MODEL = os.environ.get('OPENROUTER_MODEL', 'nvidia/llama-nemotron-embed-vl-1b-v2:free')
+OPENROUTER_MODEL = os.environ.get('OPENROUTER_MODEL', 'meta-llama/llama-3.2-3b-instruct:free')
 MODERATION_MODEL = os.environ.get('MODERATION_MODEL', OPENROUTER_MODEL)
 
 # ================== МОДЕЛИ ==================

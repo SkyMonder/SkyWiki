@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>SkyWiki — админ-панель</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f4f8;
+            padding: 30px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #1e3c72;
+            margin-bottom: 30px;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+        .tab {
+            padding: 12px 24px;
+            background: white;
+            border: none;
+            border-radius: 40px;
+            cursor: pointer;
+            font-weight: 600;
+            color: #1e3c72;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        }
+        .tab.active {
+            background: #1e3c72;
+            color: white;
+        }
+        .panel {
+            background: white;
+            border-radius: 30px;
+            padding: 25px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            display: none;
+        }
+        .panel.active {
+            display: block;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eef2f6;
+        }
+        th {
+            background: #f8fafd;
+            font-weight: 600;
+            color: #2a4a7a;
+        }
+        tr:hover {
+            background: #f5f9ff;
+        }
+        .btn {
+            padding: 6px 14px;
+            border: none;
+            border-radius: 30px;
+            background: #eef2f6;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .btn-danger {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .btn-success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .badge {
+            padding: 4px 10px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            background: #e0e7ff;
+            color: #1e3c72;
+        }
+        .badge.hidden {
+            background: #ffcdd2;
+            color: #b71c1c;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SkyWiki — управление</h1>
+        <div class="tabs">
+            <button class="tab active" data-tab="users">Пользователи</button>
+            <button class="tab" data-tab="articles">Статьи</button>
+            <button class="tab" data-tab="logs">Логи модерации</button>
+        </div>
+
+        <!-- Панель пользователей -->
+        <div class="panel active" id="users-panel">
+            <h2>Пользователи</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Имя</th>
+                        <th>Email</th>
+                        <th>Админ</th>
+                        <th>Статей</th>
+                        <th>Дата рег.</th>
+                    </tr>
+                </thead>
+                <tbody id="users-table"></tbody>
+            </table>
+        </div>
+
+        <!-- Панель статей -->
+        <div class="panel" id="articles-panel">
+            <h2>Статьи</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Заголовок</th>
+                        <th>Автор</th>
+                        <th>Просмотры</th>
+                        <th>Дата</th>
+                        <th>Статус</th>
+                        <th>Действие</th>
+                    </tr>
+                </thead>
+                <tbody id="articles-table"></tbody>
+            </table>
+        </div>
+
+        <!-- Панель логов модерации -->
+        <div class="panel" id="logs-panel">
+            <h2>Логи модерации</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Заголовок</th>
+                        <th>Вердикт</th>
+                        <th>Причина</th>
+                        <th>Дата</th>
+                    </tr>
+                </thead>
+                <tbody id="logs-table"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Переключение вкладок
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                const panelId = tab.dataset.tab + '-panel';
+                document.getElementById(panelId).classList.add('active');
+                loadData(tab.dataset.tab);
+            });
+        });
+
+        // Загрузка данных
+        async function loadData(type) {
+            if (type === 'users') {
+                const res = await fetch('/api/admin/users');
+                const users = await res.json();
+                const tbody = document.getElementById('users-table');
+                tbody.innerHTML = users.map(u => `
+                    <tr>
+                        <td>${u.id}</td>
+                        <td>${u.username}</td>
+                        <td>${u.email}</td>
+                        <td>${u.is_admin ? '✅' : '❌'}</td>
+                        <td>${u.articles_count}</td>
+                        <td>${new Date(u.created_at).toLocaleDateString()}</td>
+                    </tr>
+                `).join('');
+            }
+            if (type === 'articles') {
+                const res = await fetch('/api/admin/articles');
+                const articles = await res.json();
+                const tbody = document.getElementById('articles-table');
+                tbody.innerHTML = articles.map(a => `
+                    <tr>
+                        <td>${a.id}</td>
+                        <td>${a.title}</td>
+                        <td>${a.author}</td>
+                        <td>${a.views}</td>
+                        <td>${new Date(a.created_at).toLocaleDateString()}</td>
+                        <td><span class="badge ${a.is_hidden ? 'hidden' : ''}">${a.is_hidden ? 'скрыта' : 'видима'}</span></td>
+                        <td>
+                            <button class="btn ${a.is_hidden ? 'btn-success' : 'btn-danger'}" onclick="toggleArticle(${a.id})">
+                                ${a.is_hidden ? 'Восстановить' : 'Скрыть'}
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+            if (type === 'logs') {
+                const res = await fetch('/api/admin/moderation-logs');
+                const logs = await res.json();
+                const tbody = document.getElementById('logs-table');
+                tbody.innerHTML = logs.map(l => `
+                    <tr>
+                        <td>${l.id}</td>
+                        <td>${l.title}</td>
+                        <td><span class="badge" style="background:${l.verdict==='OK'?'#e8f5e9':'#ffebee'}">${l.verdict}</span></td>
+                        <td>${l.reason || ''}</td>
+                        <td>${new Date(l.created_at).toLocaleString()}</td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        // Скрыть/показать статью
+        async function toggleArticle(id) {
+            await fetch(`/api/admin/articles/${id}/toggle`, { method: 'POST' });
+            loadData('articles');
+        }
+
+        // Загружаем пользователей по умолчанию
+        loadData('users');
+    </script>
+</body>
+</html>

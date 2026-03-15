@@ -312,31 +312,56 @@ def ai_generate():
             return jsonify({'error': 'Prompt required'}), 400
         if not OPENROUTER_API_KEY:
             return jsonify({'error': 'AI service not configured'}), 503
+
+        # Подготовка запроса к OpenRouter
+        headers = {
+            'Authorization': f'Bearer {OPENROUTER_API_KEY}',
+            'Content-Type': 'application/json',
+            'HTTP-Referer': request.host_url,
+            'X-Title': 'SkyWiki'
+        }
+        payload = {
+            'model': OPENROUTER_MODEL,
+            'messages': [
+                {'role': 'system', 'content': 'Ты — помощник вики-энциклопедии SkyWiki. Создавай статьи в формате вики-текста (== заголовки ==, * списки, **жирный**).'},
+                {'role': 'user', 'content': data['prompt']}
+            ],
+            'max_tokens': 1500,
+            'temperature': 0.7
+        }
+
+        logger.info(f"Sending request to OpenRouter with model {OPENROUTER_MODEL}")
         response = requests.post(
             'https://openrouter.ai/api/v1/chat/completions',
-            headers={
-                'Authorization': f'Bearer {OPENROUTER_API_KEY}',
-                'Content-Type': 'application/json',
-                'HTTP-Referer': request.host_url,
-                'X-Title': 'SkyWiki'
-            },
-            json={
-                'model': OPENROUTER_MODEL,
-                'messages': [
-                    {'role': 'system', 'content': 'Ты — помощник вики-энциклопедии SkyWiki. Создавай статьи в формате вики-текста (== заголовки ==, * списки, **жирный**).'},
-                    {'role': 'user', 'content': data['prompt']}
-                ],
-                'max_tokens': 1500,
-                'temperature': 0.7
-            },
+            headers=headers,
+            json=payload,
             timeout=30
         )
+
+        # Логируем статус ответа для отладки
+        logger.info(f"OpenRouter response status: {response.status_code}")
+
+        if response.status_code != 200:
+            # Пытаемся прочитать тело ошибки
+            error_body = response.text
+            logger.error(f"OpenRouter error body: {error_body}")
+            return jsonify({'error': f'OpenRouter returned {response.status_code}'}), 502
+
         data = response.json()
-        if 'choices' not in data:
-            return jsonify({'error': 'AI service error'}), 502
+        if 'choices' not in data or not data['choices']:
+            logger.error(f"Unexpected OpenRouter response: {data}")
+            return jsonify({'error': 'AI service error: no choices'}), 502
+
         return jsonify({'response': data['choices'][0]['message']['content']})
+
+    except requests.exceptions.Timeout:
+        logger.error("OpenRouter request timed out")
+        return jsonify({'error': 'AI service timeout'}), 504
+    except requests.exceptions.RequestException as e:
+        logger.error(f"OpenRouter request failed: {e}")
+        return jsonify({'error': str(e)}), 502
     except Exception as e:
-        logger.error(f"AI generate error: {e}")
+        logger.error(f"AI generate error: {e}\n{traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
 # ================== HEALTH CHECK ==================

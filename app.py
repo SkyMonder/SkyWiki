@@ -5,7 +5,7 @@ import traceback
 import requests
 from flask import Flask, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user, UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 from flask_cors import CORS
@@ -35,7 +35,7 @@ OPENROUTER_MODEL = os.environ.get('OPENROUTER_MODEL', 'nvidia/llama-nemotron-emb
 MODERATION_MODEL = os.environ.get('MODERATION_MODEL', OPENROUTER_MODEL)
 
 # ================== МОДЕЛИ ==================
-class User(db.Model):
+class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -44,6 +44,11 @@ class User(db.Model):
     is_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     articles = db.relationship('Article', backref='author', lazy=True)
+
+    # Flask-Login требует этот атрибут; можно оставить так или динамически вычислять
+    @property
+    def is_active(self):
+        return True  # Здесь можно добавить логику, например, поле `active`
 
 class Article(db.Model):
     __tablename__ = 'articles'
@@ -245,11 +250,10 @@ def register():
 def login():
     # Обработка GET-запроса (например, при редиректе от Flask-Login)
     if request.method == 'GET':
-        # Можно вернуть подсказку или просто ошибку с пояснением
         return jsonify({
             'error': 'Method GET not allowed. Please send POST with username and password.',
             'hint': 'This endpoint is for API login. Use POST.'
-        }), 405  # 405 Method Not Allowed, но с понятным сообщением
+        }), 405
 
     # POST-обработка
     try:

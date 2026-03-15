@@ -29,7 +29,7 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# OpenRouter
+# OpenRouter (для модерации)
 OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY', '')
 OPENROUTER_MODEL = os.environ.get('OPENROUTER_MODEL', 'meta-llama/llama-3.2-3b-instruct:free')
 MODERATION_MODEL = os.environ.get('MODERATION_MODEL', OPENROUTER_MODEL)
@@ -47,7 +47,7 @@ class User(UserMixin, db.Model):
 
     @property
     def is_active(self):
-        return True  # здесь можно добавить логику деактивации
+        return True
 
 class Article(db.Model):
     __tablename__ = 'articles'
@@ -81,7 +81,7 @@ with app.app_context():
         admin = User(
             username='admin',
             email='admin@skywiki.com',
-            password_hash=generate_password_hash('admin123'),
+            password_hash=generate_password_hash('DeBard000Aeerg+=r'),
             is_admin=True
         )
         db.session.add(admin)
@@ -246,7 +246,6 @@ def register():
 
 @app.route('/api/login', methods=['GET', 'POST'])
 def login():
-    # GET-запросы (например, редирект от Flask-Login)
     if request.method == 'GET':
         return jsonify({'error': 'Method GET not allowed. Please send POST with username and password.'}), 405
 
@@ -302,67 +301,74 @@ def me():
         'is_admin': current_user.is_admin
     })
 
-# ================== AI ГЕНЕРАЦИЯ ==================
+# ================== АДМИН-ПАНЕЛЬ ==================
+@app.route('/admin')
+@login_required
+def admin_panel():
+    if not current_user.is_admin:
+        return "Access denied", 403
+    return render_template('admin.html')
+
+@app.route('/api/admin/users', methods=['GET'])
+@login_required
+def admin_get_users():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Forbidden'}), 403
+    users = User.query.all()
+    return jsonify([{
+        'id': u.id,
+        'username': u.username,
+        'email': u.email,
+        'is_admin': u.is_admin,
+        'created_at': u.created_at.isoformat(),
+        'articles_count': len(u.articles)
+    } for u in users])
+
+@app.route('/api/admin/articles', methods=['GET'])
+@login_required
+def admin_get_articles():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Forbidden'}), 403
+    arts = Article.query.order_by(Article.created_at.desc()).all()
+    return jsonify([{
+        'id': a.id,
+        'title': a.title,
+        'author': a.author.username,
+        'created_at': a.created_at.isoformat(),
+        'views': a.views,
+        'is_hidden': a.is_hidden
+    } for a in arts])
+
+@app.route('/api/admin/articles/<int:article_id>/toggle', methods=['POST'])
+@login_required
+def admin_toggle_article(article_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Forbidden'}), 403
+    article = Article.query.get_or_404(article_id)
+    article.is_hidden = not article.is_hidden
+    db.session.commit()
+    return jsonify({'message': 'Toggled', 'is_hidden': article.is_hidden})
+
+@app.route('/api/admin/moderation-logs', methods=['GET'])
+@login_required
+def admin_moderation_logs():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Forbidden'}), 403
+    logs = ModerationLog.query.order_by(ModerationLog.created_at.desc()).limit(100).all()
+    return jsonify([{
+        'id': l.id,
+        'title': l.title,
+        'verdict': l.verdict,
+        'reason': l.reason,
+        'created_at': l.created_at.isoformat(),
+        'user_id': l.user_id
+    } for l in logs])
+
+# ================== AI ГЕНЕРАЦИЯ (ОТКЛЮЧЕНА) ==================
 @app.route('/api/ai/generate', methods=['POST'])
 @login_required
 def ai_generate():
-    try:
-        data = request.json
-        if not data or not data.get('prompt'):
-            return jsonify({'error': 'Prompt required'}), 400
-        if not OPENROUTER_API_KEY:
-            return jsonify({'error': 'AI service not configured'}), 503
-
-        # Подготовка запроса к OpenRouter
-        headers = {
-            'Authorization': f'Bearer {OPENROUTER_API_KEY}',
-            'Content-Type': 'application/json',
-            'HTTP-Referer': request.host_url,
-            'X-Title': 'SkyWiki'
-        }
-        payload = {
-            'model': OPENROUTER_MODEL,
-            'messages': [
-                {'role': 'system', 'content': 'Ты — помощник вики-энциклопедии SkyWiki. Создавай статьи в формате вики-текста (== заголовки ==, * списки, **жирный**).'},
-                {'role': 'user', 'content': data['prompt']}
-            ],
-            'max_tokens': 1500,
-            'temperature': 0.7
-        }
-
-        logger.info(f"Sending request to OpenRouter with model {OPENROUTER_MODEL}")
-        response = requests.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            headers=headers,
-            json=payload,
-            timeout=30
-        )
-
-        # Логируем статус ответа для отладки
-        logger.info(f"OpenRouter response status: {response.status_code}")
-
-        if response.status_code != 200:
-            # Пытаемся прочитать тело ошибки
-            error_body = response.text
-            logger.error(f"OpenRouter error body: {error_body}")
-            return jsonify({'error': f'OpenRouter returned {response.status_code}'}), 502
-
-        data = response.json()
-        if 'choices' not in data or not data['choices']:
-            logger.error(f"Unexpected OpenRouter response: {data}")
-            return jsonify({'error': 'AI service error: no choices'}), 502
-
-        return jsonify({'response': data['choices'][0]['message']['content']})
-
-    except requests.exceptions.Timeout:
-        logger.error("OpenRouter request timed out")
-        return jsonify({'error': 'AI service timeout'}), 504
-    except requests.exceptions.RequestException as e:
-        logger.error(f"OpenRouter request failed: {e}")
-        return jsonify({'error': str(e)}), 502
-    except Exception as e:
-        logger.error(f"AI generate error: {e}\n{traceback.format_exc()}")
-        return jsonify({'error': str(e)}), 500
+    return jsonify({'error': 'AI generation is currently disabled'}), 503
 
 # ================== HEALTH CHECK ==================
 @app.route('/api/health', methods=['GET'])
